@@ -13,6 +13,10 @@
 │   ├── docker-wrapper.sh       # docker 函数包装
 │   ├── iterm2-recv-zmodem.sh   # iTerm2 接收 ZModem
 │   └── iterm2-send-zmodem.sh   # iTerm2 发送 ZModem
+├── userscripts/                # 油猴脚本（Tampermonkey / ScriptCat）
+│   ├── fnos-danmaku.user.js    # 飞牛影视弹幕增强
+│   ├── GREASYFORK.md           # Greasy Fork 发布说明
+│   └── README.md
 └── deepseek-harness-app/       # DeepSeek Harness App 启动修补
     ├── README.md
     ├── fix.sh
@@ -38,6 +42,10 @@ scripts/compress-image.sh ./images 200K avif ./converted
 cd deepseek-harness-app
 ./fix.sh
 ```
+
+### 飞牛影视弹幕
+
+见 [userscripts/README.md](userscripts/README.md)。脚本通过油猴直接给飞牛影视网页播放器挂载 danmu-api 弹幕，无需反向代理。
 
 ### 新机器上挂到 PATH
 
