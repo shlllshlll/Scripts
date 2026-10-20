@@ -141,6 +141,10 @@ fi
 
 普通终端不会命中条件，`command -v dsh` 仍然是 pnpm 的 shim。
 
+> `fix.sh` 自动处理 zsh（`~/.zshrc`）和 bash（`~/.bash_profile`）。
+> 如果登录 shell 是 fish，需要把同样的判断写进 `~/.config/fish/config.fish`
+> （fish 的 `if` 语法不同，思路相同）。
+
 ## 验证
 
 ```bash
