@@ -184,6 +184,46 @@ lsof -nP -iTCP:3080 -sTCP:LISTEN
   export DSH_APP_REAL_CLI=/path/to/@deepseek-ai/dsh/lib/bin.js
   ```
 
+## 可选：更新 dsh-git-rollback 插件
+
+旧版 `dsh-git-rollback@0.1.7` 的 `peerDependencies` 只接受 dsh 0.1.x，
+dsh 0.2.1 会主动禁用它：
+
+```text
+disabling profile plugin row "git-rollback": Plugin dsh-git-rollback@0.1.7
+is incompatible with dsh 0.2.1-rc.2
+```
+
+新版 `0.1.12`（`Jager.dsh-vscode` 0.13.57 内置）的 peer 是
+`>=0.1.0-rc.6`，可以配合 dsh 0.2.1。更新步骤：
+
+```bash
+# 1. 从扩展 VSIX 或扩展仓库的 resources/dsh-git-rollback 取得 0.1.12
+
+# 2. 放到一个稳定目录
+mkdir -p ~/.dsh/plugins
+cp -R /path/to/dsh-git-rollback ~/.dsh/plugins/dsh-git-rollback-0.1.12
+
+# 3. 修改 ~/.dsh/profiles/web/package.json，把 dsh-git-rollback 改成：
+#    "dsh-git-rollback": "file:/Users/you/.dsh/plugins/dsh-git-rollback-0.1.12"
+#    注意这里必须是绝对路径，不能用 ~
+
+# 4. 让 profile 的 node_modules 指向新目录
+rm -rf ~/.dsh/profiles/web/node_modules/dsh-git-rollback
+ln -s ~/.dsh/plugins/dsh-git-rollback-0.1.12 \
+      ~/.dsh/profiles/web/node_modules/dsh-git-rollback
+
+# 5. 更新 lockfile
+cd ~/.dsh/profiles/web
+pnpm install --lockfile-only --ignore-scripts
+
+# 6. 完全退出并重开 DeepSeek Harness App
+```
+
+只在使用 `web` profile 的 `git-rollback` 插件时需要做这一步；其他 profile
+不受影响。更新前建议备份 `~/.dsh/profiles/web/package.json` 和
+`node_modules/dsh-git-rollback`。
+
 ## 回滚
 
 ```bash
