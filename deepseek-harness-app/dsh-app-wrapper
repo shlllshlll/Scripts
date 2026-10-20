@@ -1,0 +1,213 @@
+#!/usr/bin/env node
+'use strict';
+
+/**
+ * DeepSeek Harness App launcher shim.
+ *
+ * The GUI resolves `dsh` from the login shell's PATH and then runs it as
+ * `node <path>`. pnpm/npm install `dsh` as a POSIX `/bin/sh` shim, which Node
+ * cannot parse, so this file is a real JS entry that replaces itself with the
+ * actual dsh CLI (`@deepseek-ai/dsh/lib/bin.js`) in the same process.
+ *
+ * It never relies on PATH to find the real CLI (that would find itself).
+ * Resolution order:
+ *   1. $DSH_APP_REAL_CLI
+ *   2. ~/.dsh/app-bin/dsh-target (one absolute path, optional override)
+ *   3. the `# cmd-shim-target=` recorded in the pnpm/npm bin shim
+ *   4. known pnpm/npm global locations
+ * Fallbacks: execute the original shim through /bin/sh, or spawn Node.
+ */
+
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { spawn } = require('node:child_process');
+
+const HOME = os.homedir();
+const SELF = (() => {
+  try {
+    return fs.realpathSync(__filename);
+  } catch {
+    return path.resolve(__filename);
+  }
+})();
+const ARGS = process.argv.slice(2);
+
+function log(message) {
+  process.stderr.write(`[dsh-app-wrapper] ${message}\n`);
+}
+
+function isFile(candidate) {
+  try {
+    return fs.statSync(candidate).isFile();
+  } catch {
+    return false;
+  }
+}
+
+function readText(candidate) {
+  try {
+    return fs.readFileSync(candidate, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+function listDir(directory) {
+  try {
+    return fs.readdirSync(directory);
+  } catch {
+    return [];
+  }
+}
+
+/** Read the real entry recorded by npm/pnpm's generated bin shim. */
+function shimTarget(shim) {
+  const text = readText(shim);
+  if (text === undefined) return undefined;
+  const matches = [...text.matchAll(/^#\s*cmd-shim-target=(.+?)\s*$/gm)];
+  if (matches.length === 0) return undefined;
+  const target = matches[matches.length - 1][1].trim();
+  if (!path.isAbsolute(target) || !isFile(target)) return undefined;
+  return target;
+}
+
+function pnpmHomes() {
+  const homes = [
+    process.env.PNPM_HOME,
+    path.join(HOME, 'Library', 'pnpm'),
+    path.join(HOME, '.local', 'share', 'pnpm'),
+  ].filter((value) => typeof value === 'string' && value !== '');
+  return [...new Set(homes)];
+}
+
+function shimCandidates() {
+  const shims = [];
+  for (const home of pnpmHomes()) shims.push(path.join(home, 'bin', 'dsh'));
+  const nvmRoot = path.join(HOME, '.nvm', 'versions', 'node');
+  for (const version of listDir(nvmRoot).sort().reverse()) {
+    shims.push(path.join(nvmRoot, version, 'bin', 'dsh'));
+  }
+  shims.push(
+    '/opt/homebrew/bin/dsh',
+    '/usr/local/bin/dsh',
+    path.join(HOME, '.npm-global', 'bin', 'dsh'),
+  );
+  return [...new Set(shims)];
+}
+
+/** Fallback scan for a real `lib/bin.js`, newest package first. */
+function scannedTargets() {
+  const candidates = [];
+  const push = (file) => {
+    if (!path.isAbsolute(file) || !isFile(file)) return;
+    let mtime = 0;
+    try {
+      mtime = fs.statSync(file).mtimeMs;
+    } catch {}
+    candidates.push({ file, mtime });
+  };
+
+  // Dedicated runtime under the Harness home, if one is installed there.
+  push(path.join(HOME, '.dsh', 'runtime', 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+
+  // pnpm global layout: <pnpm home>/global/<store version>/<hash>/node_modules/...
+  for (const home of pnpmHomes()) {
+    const globalRoot = path.join(home, 'global');
+    for (const version of listDir(globalRoot)) {
+      const versionRoot = path.join(globalRoot, version);
+      for (const hash of listDir(versionRoot)) {
+        push(path.join(versionRoot, hash, 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+      }
+    }
+  }
+
+  // npm global layout.
+  const npmRoots = [path.join(HOME, '.npm-global', 'lib', 'node_modules'), '/usr/local/lib/node_modules', '/opt/homebrew/lib/node_modules'];
+  for (const version of listDir(path.join(HOME, '.nvm', 'versions', 'node'))) {
+    npmRoots.push(path.join(HOME, '.nvm', 'versions', 'node', version, 'lib', 'node_modules'));
+  }
+  for (const root of npmRoots) {
+    push(path.join(root, '@deepseek-ai', 'dsh', 'lib', 'bin.js'));
+  }
+
+  return candidates.sort((left, right) => right.mtime - left.mtime).map((entry) => entry.file);
+}
+
+/** Resolve the real CLI entry, or undefined when nothing suitable exists. */
+function resolveRealCli() {
+  const explicit = process.env.DSH_APP_REAL_CLI;
+  if (typeof explicit === 'string' && explicit !== '' && isFile(explicit)) return explicit;
+
+  const overrideFile = path.join(HOME, '.dsh', 'app-bin', 'dsh-target');
+  const override = readText(overrideFile)?.trim();
+  if (override && isFile(override)) return override;
+
+  for (const shim of shimCandidates()) {
+    const target = shimTarget(shim);
+    if (target !== undefined && path.resolve(target) !== SELF) return target;
+  }
+
+  for (const target of scannedTargets()) {
+    if (path.resolve(target) !== SELF) return target;
+  }
+
+  return undefined;
+}
+
+function forwardSignals(child) {
+  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+    process.on(signal, () => {
+      try {
+        child.kill(signal);
+      } catch {}
+    });
+  }
+}
+
+function runChild(file, argv) {
+  const child = spawn(file, argv, { stdio: 'inherit', env: process.env });
+  forwardSignals(child);
+  child.on('error', (error) => {
+    log(`could not start ${file}: ${error.message}`);
+    process.exit(127);
+  });
+  child.on('exit', (code, signal) => {
+    if (signal !== null) {
+      try {
+        process.kill(process.pid, signal);
+        return;
+      } catch {}
+    }
+    process.exit(code === null ? 1 : code);
+  });
+}
+
+function replaceProcess(file, argv) {
+  if (typeof process.execve === 'function') {
+    try {
+      // argv[0] is the program name for the new image; Node/sh would
+      // otherwise read the first real argument as a script/option.
+      process.execve(file, [file, ...argv], process.env);
+      return; // execve does not return on success
+    } catch (error) {
+      log(`execve failed (${error.message}); falling back to a child process`);
+    }
+  }
+  runChild(file, argv);
+}
+
+const realCli = resolveRealCli();
+if (realCli !== undefined) {
+  replaceProcess(process.execPath, [realCli, ...ARGS]);
+} else {
+  // Last resort: run the original shim through a shell. shimCandidates()[0]
+  // is the pnpm shim; any shim will `exec node ...bin.js` itself.
+  const shim = shimCandidates().find((candidate) => isFile(candidate));
+  if (shim !== undefined) {
+    replaceProcess('/bin/sh', [shim, ...ARGS]);
+  } else {
+    log('no dsh installation was found; set DSH_APP_REAL_CLI to @deepseek-ai/dsh/lib/bin.js');
+    process.exit(127);
+  }
+}

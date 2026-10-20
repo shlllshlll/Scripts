@@ -1,0 +1,8 @@
+#!/bin/bash
+REAL_DOCKER="/opt/homebrew/bin/docker"
+
+current_context=$("$REAL_DOCKER" context show 2>/dev/null | tr -d '[:space:]')
+if [[ "$current_context" =~ ^(chatbot|chatbot2)$ ]]; then
+    export DOCKER_API_VERSION=1.41
+fi
+exec "$REAL_DOCKER" "$@"
