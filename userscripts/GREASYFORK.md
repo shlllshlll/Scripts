@@ -58,6 +58,7 @@ https://raw.githubusercontent.com/shlllshlll/Scripts/main/userscripts/fnos-danma
 ## 注意事项
 
 - `@connect *` 可能会被 Greasy Fork 审核关注；上面的说明已经解释原因。
+- 脚本有 `@name:en`，Greasy Fork 要求同时提供非空的 `@description:en`；不要删除这一行，否则会报“@description:en 不能为空字符”。
 - 不要把个人的 danmu-api Token、飞牛 Cookie 或 NAS 地址写进脚本/README。
 - 脚本只支持 ScriptCat / Tampermonkey 等支持 `GM_*` 的管理器；需要用户自己部署 danmu-api。
 - 当前脚本依赖飞牛播放器设置弹层的 DOM 结构；飞牛改版后可能需要更新选择器。
