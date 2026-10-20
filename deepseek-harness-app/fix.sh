@@ -171,8 +171,18 @@ printf '\n'
 info "done; restart DeepSeek Harness App to apply"
 
 if ((RESTART)); then
-  info "restarting DeepSeek Harness App"
-  killall DeepSeekHarnessApp 2>/dev/null || true
-  sleep 2
-  open -a "$APP_PATH"
+  info "asking DeepSeek Harness App to quit"
+  if osascript -e 'tell application id "ai.deepseek.DeepSeekHarnessApp" to quit' >/dev/null 2>&1; then
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+      pgrep -f "Contents/MacOS/DeepSeekHarnessApp" >/dev/null || break
+      sleep 0.5
+    done
+    if pgrep -f "Contents/MacOS/DeepSeekHarnessApp" >/dev/null; then
+      warn "the app did not quit; please quit it manually (Cmd+Q), then reopen it"
+    else
+      open -a "$APP_PATH"
+    fi
+  else
+    warn "macOS blocked the quit request (Automation permission); quit the app manually (Cmd+Q), then reopen it"
+  fi
 fi

@@ -51,16 +51,18 @@ SyntaxError: Invalid or unexpected token
 ```bash
 git clone git@github.com:shlllshlll/Scripts.git
 cd Scripts/deepseek-harness-app
-./fix.sh --restart
-```
-
-如果不希望脚本自动重启 App：
-
-```bash
 ./fix.sh
 ```
 
-然后手动完全退出 App（Cmd+Q）再打开。
+然后完全退出 App（Cmd+Q）再打开。
+
+如果希望脚本尝试自动退出并重开（需要 macOS 自动化权限）：
+
+```bash
+./fix.sh --restart
+```
+
+如果系统拒绝自动化请求，脚本会提示你手动 Cmd+Q，不会用 `killall` 强杀。
 
 脚本会自动：
 

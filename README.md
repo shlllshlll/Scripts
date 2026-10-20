@@ -36,7 +36,7 @@ scripts/compress-image.sh ./images 200K avif ./converted
 
 ```bash
 cd deepseek-harness-app
-./fix.sh --restart
+./fix.sh
 ```
 
 ### 新机器上挂到 PATH
