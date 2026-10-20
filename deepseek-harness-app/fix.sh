@@ -172,7 +172,7 @@ info "done; restart DeepSeek Harness App to apply"
 
 if ((RESTART)); then
   info "restarting DeepSeek Harness App"
-  pkill -TERM -f "DeepSeekHarnessApp.app/Contents/MacOS/DeepSeekHarnessApp" 2>/dev/null || true
+  killall DeepSeekHarnessApp 2>/dev/null || true
   sleep 2
   open -a "$APP_PATH"
 fi
