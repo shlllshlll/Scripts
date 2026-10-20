@@ -4,8 +4,9 @@
 // @namespace    https://github.com/shlllshlll/Scripts
 // @homepageURL  https://github.com/shlllshlll/Scripts
 // @supportURL   https://github.com/shlllshlll/Scripts/issues
-// @version      1.0.19
+// @version      1.0.20
 // @description  为飞牛影视网页播放器挂载 danmu-api 弹幕：自动匹配、手动搜索、完整的 GM 设置面板；无需反向代理。
+// @description:en  Add danmu-api bullet comments to the fnOS Video web player, with auto-match, manual search, an in-player settings submenu, and GM-based configuration.
 // @author       shlllshlll
 // @license      MIT
 // @match        *://*/v
@@ -32,7 +33,7 @@
      *    - 菜单命令「飞牛弹幕设置」打开独立设置窗口。
      * ══════════════════════════════════════════════════════════════════ */
 
-    const VERSION = '1.0.19';
+    const VERSION = '1.0.20';
     const STORE_KEY = 'fnos_danmaku_cfg_v1';
     const FONT = '"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif';
     const PSEL = 'div.xgplayer, .xgplayer, [class*="xgplayer"]';
