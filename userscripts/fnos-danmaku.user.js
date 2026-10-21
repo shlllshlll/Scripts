@@ -4,7 +4,7 @@
 // @namespace    https://github.com/shlllshlll/Scripts
 // @homepageURL  https://github.com/shlllshlll/Scripts
 // @supportURL   https://github.com/shlllshlll/Scripts/issues
-// @version      1.0.20
+// @version      1.0.21
 // @description  为飞牛影视网页播放器挂载 danmu-api 弹幕：自动匹配、手动搜索、完整的 GM 设置面板；无需反向代理。
 // @description:en  Add danmu-api bullet comments to the fnOS Video web player, with auto-match, manual search, an in-player settings submenu, and GM-based configuration.
 // @author       shlllshlll
@@ -33,7 +33,7 @@
      *    - 菜单命令「飞牛弹幕设置」打开独立设置窗口。
      * ══════════════════════════════════════════════════════════════════ */
 
-    const VERSION = '1.0.20';
+    const VERSION = '1.0.21';
     const STORE_KEY = 'fnos_danmaku_cfg_v1';
     const FONT = '"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif';
     const PSEL = 'div.xgplayer, .xgplayer, [class*="xgplayer"]';
@@ -843,6 +843,13 @@
             this.fixedTop = [];
             this.fixedBot = [];
             this.idx = 0;
+            this.stats = { scroll: 0, top: 0, bottom: 0 };
+            for (const d of this.all) {
+                if (d.type === 1) this.stats.bottom++;
+                else if (d.type === 2) this.stats.top++;
+                else this.stats.scroll++;
+            }
+            log('弹幕类型统计', this.stats);
             if (this.onCount) this.onCount(this.all.length);
             this.measureAll();
             this.onSeek();
@@ -940,8 +947,11 @@
             const ct = this.video.currentTime - cfg.offset;
             while (this.idx < this.all.length && this.all[this.idx].time <= ct + 0.2) {
                 const dm = this.all[this.idx++];
-                if (Math.random() * 100 >= cfg.density) continue;
-                if (this.countVisible() >= cfg.maxActive) continue;
+                // 固定弹幕（顶部/底部）数量少，不参与滚动弹幕的密度/同屏上限淘汰。
+                if (dm.type === 0) {
+                    if (Math.random() * 100 >= cfg.density) continue;
+                    if (this.countVisible() >= cfg.maxActive) continue;
+                }
                 this.fire(dm);
             }
         }
@@ -3071,6 +3081,13 @@
             class: 'fn-hint',
             text: '时间偏移：正数 = 弹幕延后，负数 = 弹幕提前。'
         }));
+        const engineStats = S && S.engine ? S.engine.stats : null;
+        if (engineStats) {
+            displayBody.append(h('div', {
+                class: 'fn-hint',
+                text: `当前弹幕类型：滚动 ${engineStats.scroll} · 顶部 ${engineStats.top} · 底部 ${engineStats.bottom}`
+            }));
+        }
         displayBody.append(toggleRow('显示弹幕', '关闭后保留已加载的数据，随时可以再次打开', cfg.enabled, v => {
             cfg.enabled = v;
             saveSoon();
