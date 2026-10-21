@@ -17,6 +17,10 @@
 │   ├── fnos-danmaku.user.js    # 飞牛影视弹幕增强
 │   ├── GREASYFORK.md           # Greasy Fork 发布说明
 │   └── README.md
+├── hp-printer-driver/          # HP 打印机驱动跨版本迁移
+│   ├── README.md
+│   ├── collect.sh              # 在驱动正常的机器上收集
+│   └── install.sh              # 在装不上安装器的机器上还原
 └── deepseek-harness-app/       # DeepSeek Harness App 启动修补
     ├── README.md
     ├── fix.sh
@@ -41,6 +45,17 @@ scripts/compress-image.sh ./images 200K avif ./converted
 ```bash
 cd deepseek-harness-app
 ./fix.sh
+```
+
+### HP 打印机驱动迁移
+
+见 [hp-printer-driver/README.md](hp-printer-driver/README.md)。新 macOS 上官方安装器
+被版本检查挡住时，从另一台驱动正常的机器把 `/Library/Printers/hp` 等目录搬过去。
+
+```bash
+cd hp-printer-driver
+sudo bash collect.sh              # 在驱动正常的那台机器上收集
+sudo bash install.sh <备份目录>    # 在新机器上还原，只写 /Library
 ```
 
 ### 飞牛影视弹幕
