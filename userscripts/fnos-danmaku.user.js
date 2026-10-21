@@ -4,7 +4,7 @@
 // @namespace    https://github.com/shlllshlll/Scripts
 // @homepageURL  https://github.com/shlllshlll/Scripts
 // @supportURL   https://github.com/shlllshlll/Scripts/issues
-// @version      1.0.21
+// @version      1.0.22
 // @description  为飞牛影视网页播放器挂载 danmu-api 弹幕：自动匹配、手动搜索、完整的 GM 设置面板；无需反向代理。
 // @description:en  Add danmu-api bullet comments to the fnOS Video web player, with auto-match, manual search, an in-player settings submenu, and GM-based configuration.
 // @author       shlllshlll
@@ -33,7 +33,7 @@
      *    - 菜单命令「飞牛弹幕设置」打开独立设置窗口。
      * ══════════════════════════════════════════════════════════════════ */
 
-    const VERSION = '1.0.21';
+    const VERSION = '1.0.22';
     const STORE_KEY = 'fnos_danmaku_cfg_v1';
     const FONT = '"PingFang SC","Microsoft YaHei","Helvetica Neue",Arial,sans-serif';
     const PSEL = 'div.xgplayer, .xgplayer, [class*="xgplayer"]';
@@ -851,6 +851,7 @@
             }
             log('弹幕类型统计', this.stats);
             if (this.onCount) this.onCount(this.all.length);
+            if (danmakuSubmenu) danmakuSubmenu.update?.();
             this.measureAll();
             this.onSeek();
             this.ensureLoop();
@@ -1973,7 +1974,8 @@
         header.className = 'border-0 border-b border-solid border-[var(--semi-color-border-modal)] ' +
             'pb-3.5 pl-1.5 pr-2 pt-1.5 !cursor-default';
         const headerLine = document.createElement('div');
-        headerLine.className = 'flex items-center gap-1';
+        headerLine.className = 'flex w-full items-center gap-1';
+        headerLine.style.width = '100%';
         const back = document.createElement('button');
         back.type = 'button';
         back.title = '返回设置';
@@ -1989,15 +1991,15 @@
         const title = document.createElement('div');
         title.textContent = '弹幕';
         const countEl = document.createElement('div');
-        countEl.className = 'ml-auto text-xs leading-xs';
+        countEl.className = 'ml-2 text-xs leading-xs';
         const settingsBtn = document.createElement('button');
         settingsBtn.type = 'button';
         settingsBtn.title = '弹幕设置';
         settingsBtn.setAttribute('aria-label', '弹幕设置');
-        settingsBtn.className = 'ml-2 inline-flex items-center justify-center ' +
+        settingsBtn.className = 'ml-auto inline-flex items-center justify-center ' +
             'text-[var(--semi-color-text-1)] hover:text-[var(--semi-color-text-0)] cursor-pointer';
         settingsBtn.style.cssText =
-            'width:20px;height:20px;border:0;background:transparent;padding:0;';
+            'width:20px;height:20px;border:0;background:transparent;padding:0;margin-left:auto;';
         settingsBtn.append(svgSettings());
         settingsBtn.addEventListener('click', e => {
             e.stopPropagation();
@@ -2045,11 +2047,33 @@
 
         const quickRow = menuRow('自动匹配当前视频', null, {
             onClick: () => {
-                closeDanmakuSubmenu();
+                if (S) {
+                    S.matchState = 'matching';
+                    S.matchError = null;
+                    st.update?.();
+                }
                 refreshCurrent(true);
             }
         });
         body.append(quickRow);
+
+        const matchCard = document.createElement('div');
+        matchCard.style.cssText =
+            'display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:6px;' +
+            'background:var(--semi-color-fill-0,rgba(255,255,255,.06));';
+        const matchTitle = document.createElement('div');
+        matchTitle.className = 'text-xs leading-xs';
+        matchTitle.style.cssText = 'color:var(--semi-color-text-0,#fff);overflow:hidden;' +
+            'text-overflow:ellipsis;white-space:nowrap;';
+        const matchMeta = document.createElement('div');
+        matchMeta.className = 'text-xs leading-xs';
+        matchMeta.style.color = 'var(--semi-color-text-1,#a1a1aa)';
+        const matchSub = document.createElement('div');
+        matchSub.className = 'text-xs leading-xs';
+        matchSub.style.cssText = 'color:var(--semi-color-text-1,#a1a1aa);overflow:hidden;' +
+            'text-overflow:ellipsis;white-space:nowrap;';
+        matchCard.append(matchTitle, matchMeta, matchSub);
+        body.append(matchCard);
 
         const results = document.createElement('div');
         results.style.cssText = 'display:flex;flex-direction:column;gap:8px;';
@@ -2106,7 +2130,7 @@
                     (ep.episodeTitle || ep.title ? ` · ${ep.episodeTitle || ep.title}` : '');
                 results.append(menuRow(label, null, {
                     truncate: true,
-                    onClick: () => loadEpisode(ep, `${anime.animeTitle || anime.title || ''} ${label}`)
+                    onClick: () => loadEpisode(ep, `${anime.animeTitle || anime.title || ''} ${label}`, anime)
                 }));
             }
         };
@@ -2154,7 +2178,7 @@
             }
         }
 
-        async function loadEpisode(ep, desc) {
+        async function loadEpisode(ep, desc, anime) {
             const cid = ep.episodeId ?? ep.id;
             if (cid == null) {
                 setStatus('该剧集没有可用的弹幕 ID', true);
@@ -2166,29 +2190,85 @@
                 const result = await api.comment(cid);
                 if (my !== seq || danmakuSubmenu !== st || !S) return;
                 if (!result.comments.length) {
+                    S.matchState = 'error';
+                    S.matchError = '该集暂无弹幕';
+                    st.update();
                     setStatus('该集暂无弹幕', true);
                     return;
                 }
                 S.engine.load(result.comments, result.videoDuration);
+                S.matchInfo = {
+                    animeTitle: anime?.animeTitle || anime?.title || '',
+                    episodeTitle: ep.episodeTitle || ep.title || '',
+                    source: [anime?.sourceName, anime?.source, ep?.source]
+                        .find(v => typeof v === 'string' && v) || '',
+                    count: result.comments.length,
+                    label: desc
+                };
+                S.matchState = 'matched';
+                S.matchError = null;
+                st.update();
                 updateSettingRow();
                 flash(`已加载 ${result.comments.length} 条弹幕`, false, desc);
                 setStatus(`已加载 ${result.comments.length} 条弹幕`, false);
-                setTimeout(() => {
-                    if (danmakuSubmenu === st) closeDanmakuSubmenu();
-                }, 700);
             } catch (e) {
                 if (my !== seq) return;
+                S.matchState = 'error';
+                S.matchError = e.message;
+                st.update();
                 setStatus(`加载失败：${e.message}`, true);
                 warn('加载弹幕失败', e);
             }
         }
 
         st.update = () => {
-            countEl.textContent = S && S.count > 0
-                ? `${S.count} 条`
+            const count = S ? S.count : 0;
+            countEl.textContent = count > 0
+                ? `${count} 条`
                 : cfg.enabled ? '未加载' : '已关闭';
             const sw = switchRow._switch;
             if (sw && sw._set) sw._set(cfg.enabled);
+
+            const stats = S && S.engine ? S.engine.stats : null;
+            const match = S ? S.matchInfo : null;
+            let text = '尚未匹配弹幕';
+            let color = 'var(--semi-color-text-1,#a1a1aa)';
+            if (S && S.matchState === 'matching') {
+                text = '正在匹配弹幕…';
+            } else if (S && S.matchError) {
+                text = `未匹配：${S.matchError}`;
+                color = '#ff9b9b';
+            } else if (match && (count || match.count)) {
+                const parts = [match.animeTitle, match.episodeTitle].filter(Boolean);
+                text = `已匹配：${parts.join(' · ') || match.label || '弹幕'}`;
+                color = 'var(--semi-color-text-0,#fff)';
+            } else if (count > 0) {
+                text = `已加载 ${count} 条弹幕`;
+                color = 'var(--semi-color-text-0,#fff)';
+            }
+            matchTitle.textContent = text;
+            matchTitle.title = text;
+            matchTitle.style.color = color;
+
+            const meta = [];
+            if (S && S.matchState !== 'matching') {
+                if (stats) meta.push(`滚动 ${stats.scroll} · 顶部 ${stats.top} · 底部 ${stats.bottom}`);
+                if (count > 0) meta.push(`共 ${count} 条`);
+                if (match && match.source) meta.push(`来源：${match.source}`);
+            }
+            matchMeta.textContent = meta.join(' · ');
+            matchMeta.style.display = meta.length ? '' : 'none';
+
+            if (S && S.info) {
+                const ep = S.info.isSeries
+                    ? ` S${pad2(S.info.season)}E${pad2(S.info.episode)}`
+                    : '';
+                matchSub.textContent = `当前视频：${S.info.title}${ep}`;
+                matchSub.style.display = '';
+            } else {
+                matchSub.textContent = '';
+                matchSub.style.display = 'none';
+            }
         };
         st.update();
 
@@ -2600,10 +2680,16 @@
         if (!info) return;
         const names = buildMatchNames(info);
         if (!names.length) {
+            S.matchState = 'error';
+            S.matchError = '无法生成匹配关键词';
+            if (danmakuSubmenu) danmakuSubmenu.update?.();
             flash('无法生成匹配关键词', true);
             return;
         }
 
+        S.matchState = 'matching';
+        S.matchError = null;
+        if (danmakuSubmenu) danmakuSubmenu.update?.();
         flash('正在匹配弹幕…', false, names[0]);
         let lastError = null;
 
@@ -2616,6 +2702,9 @@
                 if (seq !== S.matchSeq) return;
                 lastError = e;
                 if (e.status === 401 || e.status === 403) {
+                    S.matchState = 'error';
+                    S.matchError = '弹幕 API 鉴权失败';
+                    if (danmakuSubmenu) danmakuSubmenu.update?.();
                     flash('弹幕 API 鉴权失败，请检查 Token', true, name);
                     return;
                 }
@@ -2623,6 +2712,9 @@
                     warn('匹配请求失败，尝试下一个关键词', name, e);
                     continue;
                 }
+                S.matchState = 'error';
+                S.matchError = '无法连接弹幕 API';
+                if (danmakuSubmenu) danmakuSubmenu.update?.();
                 flash('无法连接弹幕 API，请检查设置中的地址', true, e.message);
                 return;
             }
@@ -2649,6 +2741,18 @@
             if (result.comments.length) {
                 S.engine.load(result.comments, result.videoDuration);
                 const desc = [found.animeTitle, found.episodeTitle].filter(Boolean).join(' · ') || name;
+                const source = [found.sourceName, found.source, found.from, found.platform]
+                    .find(v => typeof v === 'string' && v) || '';
+                S.matchInfo = {
+                    animeTitle: found.animeTitle || found.animeName || found.title || '',
+                    episodeTitle: found.episodeTitle || found.episodeName || '',
+                    source,
+                    count: result.comments.length,
+                    label: desc
+                };
+                S.matchState = 'matched';
+                S.matchError = null;
+                if (danmakuSubmenu) danmakuSubmenu.update?.();
                 flash(`已加载 ${result.comments.length} 条弹幕`, false, desc);
                 return;
             }
@@ -2658,6 +2762,9 @@
         const message = lastError?.status === 404
             ? '未找到匹配的弹幕'
             : '未匹配到弹幕，可点击「弹幕」手动搜索';
+        S.matchState = 'error';
+        S.matchError = message;
+        if (danmakuSubmenu) danmakuSubmenu.update?.();
         flash(message, true, lastError?.message || names[0]);
     }
 
@@ -2673,16 +2780,23 @@
             info = await getInfo();
         } catch (e) {
             if (S !== state || seq !== state.matchSeq) return;
+            state.matchState = 'error';
+            state.matchError = '读取视频信息失败';
+            if (danmakuSubmenu) danmakuSubmenu.update?.();
             flash('读取视频信息失败', true, e.message);
             return;
         }
         if (S !== state || seq !== state.matchSeq) return;
         if (!info) {
+            state.matchState = 'error';
+            state.matchError = '未识别到当前视频';
+            if (danmakuSubmenu) danmakuSubmenu.update?.();
             if (manual) flash('未识别到当前视频', true);
             return;
         }
         state.info = info;
         state.panel.setInfo(info);
+        if (danmakuSubmenu) danmakuSubmenu.update?.();
         if (!cfg.autoMatch && !manual) return;
         await autoMatch(info, seq);
     }
